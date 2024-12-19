@@ -28,6 +28,18 @@ local function is_tmux_pane_zoomed()
   return tmux_command("display-message -p '#{window_zoomed_flag}'"):match("1")
 end
 
+-- Determine if there is a tmux pane in a specific direction
+local function has_tmux_pane(direction)
+  local position = {h = "left", l = "right"}
+  return tmux_command(string.format("display-message -p '#{pane_at_%s}'", position[direction])):match("1")
+end
+
+-- Switch to next or previous tmux window
+local function switch_tmux_window(direction)
+  local cmd = direction == "h" and "select-window -p" or "select-window -n"
+  tmux_command(cmd)
+end
+
 -- Forward navigation to tmux if necessary
 local function tmux_or_vim_navigate(direction)
   local current_win = vim.fn.winnr()
@@ -35,13 +47,18 @@ local function tmux_or_vim_navigate(direction)
   local at_tab_edge = current_win == vim.fn.winnr()
 
   if is_tmux and at_tab_edge then
-    local tmux_direction = {h = "L", j = "D", k = "U", l = "R", p = "l"}
+    if direction == "h" or direction == "l" then
+      if not has_tmux_pane(direction) then
+        -- Switch to next/previous tmux window
+        switch_tmux_window(direction)
+        return
+      end
+    end
+
+    local tmux_direction = {h = "L", j = "D", k = "U", l = "R"}
     local cmd = string.format("select-pane -%s", tmux_direction[direction])
     if vim.g.tmux_navigator_preserve_zoom == 1 then
       cmd = cmd .. " -Z"
-    end
-    if vim.g.tmux_navigator_no_wrap == 1 then
-      cmd = string.format("if -F \"#{pane_at_%s}\" \"\" \"%s\"", direction, cmd)
     end
     tmux_command(cmd)
   end
